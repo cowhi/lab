@@ -1038,3 +1038,10 @@ py_test(
     main = "python/random_agent_test.py",
     deps = [":random_agent"],
 )
+
+py_binary(
+    name = "my_agent",
+    srcs = ["python/my_agent.py"],
+    data = [":deepmind_lab.so"],
+    main = "python/my_agent.py",
+)
