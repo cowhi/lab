@@ -1045,3 +1045,14 @@ py_binary(
     data = [":deepmind_lab.so"],
     main = "python/my_agent.py",
 )
+
+py_binary(
+    name = "launcher",
+    srcs = ["cowhi/launcher.py",
+            "cowhi/agents.py",
+            "cowhi/environments.py",
+            "cowhi/models.py",
+            "cowhi/replaymemories.py"],
+    data = [":deepmind_lab.so"],
+    main = "cowhi/launcher.py",
+)
