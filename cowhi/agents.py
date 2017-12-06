@@ -23,8 +23,21 @@ class Agent(object):
         self.env = env
         self.rewards = 0.0
         self.observation = None
+        self.model = None
         self.model_path = os.path.join(target_dir, 'models')
+        if not os.path.isdir(self.model_path):
+            os.makedirs(self.model_path)
+        self.video_path = os.path.join(target_dir, 'videos')
+        if not os.path.isdir(self.video_path):
+            os.makedirs(self.video_path)
         self.start_time = time.time()
+
+    def get_action(self, state):
+        if random.random() <= 0.05:
+            a = random.randint(0, self.env.num_actions-1)
+        else:
+            a = self.model.get_action(state)
+        return a
 
     def print_stats(self, elapsed_time, step, step_num, train_scores):
         steps_per_s = 1.0 * step / elapsed_time
@@ -53,6 +66,61 @@ class Agent(object):
             max_train = train_scores.max()
         print("Episodes: {} Rewards: mean: {:.2f}, std: {:.2f}, min: {:.2f}, max: {:.2f}".format(
             len(train_scores), mean_train, std_train, min_train, max_train), file=sys.stderr)
+
+    def preprocess_observation(self, img):
+        if self.channels == 1:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img = cv2.resize(img, (self.resolution[1], self.resolution[0]))
+        return np.reshape(img, self.resolution)
+
+    def play(self):
+        if self.args.save_video:
+            # size = (self.args.width, self.args.height)
+            size = (320, 240)
+            fps = 30.0  # / frame_repeat
+            # fourcc = cv2.VideoWriter_fourcc(*'XVID')  # cv2.cv.CV_FOURCC(*'XVID')
+            fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
+            video_path = os.path.join(
+                self.video_path,
+                "video_" + os.path.basename(self.args.load_model) + ".avi")
+            print(video_path, fps, size)
+            out_video = cv2.VideoWriter(video_path, fourcc, fps, size)
+
+        reward_total = 0
+        num_episodes = 1
+        while num_episodes != 0:
+            if not self.env.is_running():
+                self.env.reset()
+                print("Total reward: {}".format(reward_total))
+                reward_total = 0
+                num_episodes -= 1
+
+            state_raw = self.env.get_observation()
+
+            state = self.preprocess_observation(state_raw)
+            action = self.get_action(state)
+
+            for _ in xrange(self.args.frame_repeat):
+                # Display.
+                if self.args.show:
+                    cv2.imshow("frame-test", state_raw)
+                    cv2.waitKey(20)
+
+                if self.args.save_video:
+                    out_video.write(state_raw.astype('uint8'))
+
+                reward = self.env.step(action, 1)
+                reward_total += reward
+
+                if not self.env.is_running():
+                    break
+
+                state_raw = self.env.get_observation()
+        print(state_raw.astype('uint8').shape, type(state_raw.astype('uint8')))
+        if self.args.save_video :
+            out_video.release()
+        if self.args.show:
+            cv2.destroyAllWindows()
 
 class SingleTaskAgent(Agent):
     def __init__(self, args):
@@ -106,7 +174,7 @@ class SimpleDQNAgent(Agent):
         self.start_eps = 1.0
         self.end_eps = 0.1
         self.eps_decay_iter = 0.33 * self.args.length
-        self.model_backup_frequency = 0.01 * self.args.length
+        self.model_backup_frequency = 0.2 * self.args.length  # 0.01 * self.args.length
         self.channels = 3
         self.resolution = (40, 40) + (self.channels,)
 
@@ -139,13 +207,6 @@ class SimpleDQNAgent(Agent):
             q2 = np.max(self.model.get_q(s2), axis=1)
             q[np.arange(q.shape[0]), a] = r + (1 - isterminal) * self.model.discount_factor * q2
             self.model.learn(s1, q)
-
-    def get_action(self, state):
-        if random.random() <= 0.05:
-            a = random.randint(0, self.env.num_actions-1)
-        else:
-            a = self.model.get_action(state)
-        return a
 
     def step(self, iteration):
         s = self.preprocess_observation(self.env.get_observation())
@@ -198,9 +259,4 @@ class SimpleDQNAgent(Agent):
 
         self.env.reset()
 
-    def preprocess_observation(self, img):
-        if self.channels == 1:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        img = cv2.resize(img, (self.resolution[1], self.resolution[0]))
-        return np.reshape(img, self.resolution)
 

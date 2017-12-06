@@ -59,9 +59,11 @@ class LabEnvironment(Environment):
             self.action[self.indices["MOVE_BACK_FORWARD"]] = 1
         return np.clip(self.action, self.mins, self.maxs).astype(np.intc)
 
-    def step(self, action):
+    def step(self, action, num_steps=None):
+        if not num_steps:
+            num_steps = self.args.frame_repeat
         return self.env.step(self._map_actions(action),
-                             num_steps=self.args.frame_repeat)
+                             num_steps=num_steps)
 
     def get_observation(self):
         obs = self.env.observations()

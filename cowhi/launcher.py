@@ -18,7 +18,7 @@ __license__ = "MIT"
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--length', type=int, default=1000,
+    parser.add_argument('--length', type=int, default=10000,
                         help='Number of steps to run the agent')
     parser.add_argument('--width', type=int, default=80,
                         help='Horizontal size of the observations')
@@ -40,6 +40,12 @@ def parse_args():
                         help='The number of frames where an action is repeated.')
     parser.add_argument('--load_model', type=str, default=None,
                         help='The path to a model to load for the agent.')
+    parser.add_argument('--save_video', type=bool, default=False,
+                        help='If this is set a video is saved during testing.')
+    parser.add_argument('--show', type=bool, default=False,
+                        help='If this is set a video is shown during testing.')
+    parser.add_argument('--play', type=bool, default=False,
+                        help='If this is set the agent only runs some test steps.')
     return parser.parse_args()
 
 
@@ -78,11 +84,15 @@ def prepare_logging(args):
         args_dump.write("%s=%s\n" % (str(key), str(args_dict[key])))
     args_dump.flush()
     args_dump.close()
-
+    _logger.info("Here we go")
     return target_dir
 
 
-def main(args, target_dir):
+def main(args):
+    if args.play:
+        args.width = 320
+        args.height = 240
+    target_dir = prepare_logging(args)
     # Initialize environment
     lab = LabEnvironment(args)
     # Initialize agent
@@ -90,15 +100,11 @@ def main(args, target_dir):
     # Initialize experiment
     # experiment = SingleTaskExperiment(lab, agent, args, target_dir)
     # Train
-    agent.train()
+    if not args.play:
+        agent.train()
+    agent.play()
 
 
 if __name__ == "__main__" and __package__ is None:
-    #sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
     args = parse_args()
-    target_dir = prepare_logging(args)
-    # if args.runfiles_path:
-    #     deepmind_lab.set_runfiles_path(args.runfiles_path)
-    main(args, target_dir)
+    main(args)

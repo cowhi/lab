@@ -1047,6 +1047,13 @@ py_binary(
 )
 
 py_binary(
+    name = "rl_3d_dqn",
+    srcs = ["rl_3d/agent_dqn.py"],
+    data = [":deepmind_lab.so"],
+    main = "rl_3d/agent_dqn.py",
+)
+
+py_binary(
     name = "launcher",
     srcs = ["cowhi/launcher.py",
             "cowhi/agents.py",
