@@ -29,6 +29,9 @@ class Agent(object):
         self.rng = rng
         self.env = env
         self.rewards = 0.0
+        self.epsilon = self.args.epsilon_start
+
+
         self.observation = None
         self.model = None
         self.model_name = None
@@ -41,13 +44,6 @@ class Agent(object):
         if not os.path.isdir(self.video_path):
             os.makedirs(self.video_path)
         self.start_time = time.time()
-
-    def get_action(self, state):
-        if random.random() <= 0.05:
-            a = random.randint(0, self.env.num_actions-1)
-        else:
-            a = self.model.get_action(state)
-        return a
 
     def preprocess_input(self, img):
         if self.args.color_channels == 1:
@@ -143,25 +139,34 @@ class SimpleDQNAgent(Agent):
             qs[np.arange(qs.shape[0]), a] = r + (1 - is_terminal) * self.args.gamma * max_qs
             self.model.train(s, qs)
 
-    def update_epsilon(self, iteration):
+    def update_epsilon(self, steps):
         # Update epsilon if necessary
-        if iteration > self.args.epsilon_decay_steps:
+        if steps > self.args.epsilon_decay_steps:
             return self.args.epsilon_min
         else:
             return self.args.epsilon_start - \
-                  iteration * (self.args.epsilon_start - self.args.epsilon_min) / \
+                  steps * (self.args.epsilon_start - self.args.epsilon_min) / \
                   self.args.epsilon_decay_steps
+
+    def get_action(self, state):
+        # TODO use rng
+        if random.random() <= self.epsilon:
+            a = random.randint(0, self.env.num_actions-1)
+        else:
+            a = self.model.get_action(state)
+        return a
 
     def step(self, iteration):
         s = self.preprocess_input(self.env.get_observation())
 
         eps = self.update_epsilon(iteration)
 
+        a = self.get_action(s)
         # TODO use rng
-        if random.random() <= eps:
-            a = random.randint(0, self.env.num_actions-1)
-        else:
-            a = self.model.get_action(s)
+        # if random.random() <= eps:
+        #    a = random.randint(0, self.env.num_actions-1)
+        # else:
+        #    a = self.model.get_action(s)
 
         reward = self.env.step(a)
         self.rewards += reward

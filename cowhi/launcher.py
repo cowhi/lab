@@ -58,9 +58,9 @@ def parse_args():
                             help='The number of frames where an action is repeated.')
     agent_args.add_argument('--epsilon_start', type=float, default=1.0,
                             help='Exploration rate (epsilon) at the beginning of training.')
-    agent_args.add_argument('--epsilon_decay_duration', type=float, default=0.66,
-                            help='Percentage of total steps from starting epsilon to minimum epsilon.')
-    agent_args.add_argument('--eps_min', type=float, default=0.1,
+    agent_args.add_argument('--epsilon_decay_steps', type=int, default=600000,
+                            help='Number of steps from starting epsilon to minimum epsilon.')
+    agent_args.add_argument('--epsilon_min', type=float, default=0.1,
                             help='Minimum value of exploration rate (epsilon) during training.')
 
     model_args = parser.add_argument_group('Model')
