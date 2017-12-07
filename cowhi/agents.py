@@ -5,25 +5,34 @@ from __future__ import print_function
 import cv2
 import os
 import random
+import six
 import sys
 import time
 import numpy as np
 import tensorflow as tf
 
+from six.moves import range
+
 from cowhi.models import SimpleDQNModel
 from cowhi.replaymemories import SimpleReplayMemory
+from cowhi.helper import print_stats
 
 import logging
 _logger = logging.getLogger(__name__)
 
 
 class Agent(object):
-    def __init__(self, env, args, target_dir=None):
+    def __init__(self, args, rng, env, target_dir=None):
+        _logger.info("Initializing Agent (type: %s, load_model: %s)" %
+                     (args.agent, str(isinstance(args.load_model, six.string_types))))
         self.args = args
+        self.rng = rng
         self.env = env
         self.rewards = 0.0
         self.observation = None
         self.model = None
+        self.model_name = None
+        self.model_last = None
         self.model_path = os.path.join(target_dir, 'models')
         if not os.path.isdir(self.model_path):
             os.makedirs(self.model_path)
@@ -39,52 +48,24 @@ class Agent(object):
             a = self.model.get_action(state)
         return a
 
-    def print_stats(self, elapsed_time, step, step_num, train_scores):
-        steps_per_s = 1.0 * step / elapsed_time
-        steps_per_m = 60.0 * step / elapsed_time
-        steps_per_h = 3600.0 * step / elapsed_time
-        steps_remain = step_num - step
-        remain_h = int(steps_remain / steps_per_h)
-        remain_m = int((steps_remain - remain_h * steps_per_h) / steps_per_m)
-        remain_s = int((steps_remain - remain_h * steps_per_h - remain_m * steps_per_m) / steps_per_s)
-        elapsed_h = int(elapsed_time / 3600)
-        elapsed_m = int((elapsed_time - elapsed_h * 3600) / 60)
-        elapsed_s = int((elapsed_time - elapsed_h * 3600 - elapsed_m * 60))
-        print("{}% | Steps: {}/{}, {:.2f}M step/h, {:02}:{:02}:{:02}/{:02}:{:02}:{:02}".format(
-            100.0 * step / step_num, step, step_num, steps_per_h / 1e6,
-            elapsed_h, elapsed_m, elapsed_s, remain_h, remain_m, remain_s), file=sys.stderr)
 
-        mean_train = 0
-        std_train = 0
-        min_train = 0
-        max_train = 0
-        if (len(train_scores) > 0):
-            train_scores = np.array(train_scores)
-            mean_train = train_scores.mean()
-            std_train = train_scores.std()
-            min_train = train_scores.min()
-            max_train = train_scores.max()
-        print("Episodes: {} Rewards: mean: {:.2f}, std: {:.2f}, min: {:.2f}, max: {:.2f}".format(
-            len(train_scores), mean_train, std_train, min_train, max_train), file=sys.stderr)
-
-    def preprocess_observation(self, img):
-        if self.channels == 1:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        img = cv2.resize(img, (self.resolution[1], self.resolution[0]))
-        return np.reshape(img, self.resolution)
 
     def play(self):
+        out_video = None
         if self.args.save_video:
-            # size = (self.args.width, self.args.height)
-            size = (320, 240)
-            fps = 30.0  # / frame_repeat
-            # fourcc = cv2.VideoWriter_fourcc(*'XVID')  # cv2.cv.CV_FOURCC(*'XVID')
+            # TODO: set size dynamically
+            size = (self.args.width, self.args.height)
+            # size = (320, 240)
+            # TODO check if better: fps = 30.0  # / frame_repeat
             fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
+            # video_path = os.path.join(
+            #    self.video_path,
+            #    "video_" + os.path.basename(self.args.load_model) + ".avi")
             video_path = os.path.join(
                 self.video_path,
-                "video_" + os.path.basename(self.args.load_model) + ".avi")
-            print(video_path, fps, size)
-            out_video = cv2.VideoWriter(video_path, fourcc, fps, size)
+                "video_" + self.model_name + ".avi")
+            print(video_path, self.args.fps, size)
+            out_video = cv2.VideoWriter(video_path, fourcc, self.args.fps, size)
 
         reward_total = 0
         num_episodes = 1
@@ -97,10 +78,10 @@ class Agent(object):
 
             state_raw = self.env.get_observation()
 
-            state = self.preprocess_observation(state_raw)
+            state = self.preprocess_input(state_raw)
             action = self.get_action(state)
 
-            for _ in xrange(self.args.frame_repeat):
+            for _ in range(self.args.frame_repeat):
                 # Display.
                 if self.args.show:
                     cv2.imshow("frame-test", state_raw)
@@ -116,67 +97,27 @@ class Agent(object):
                     break
 
                 state_raw = self.env.get_observation()
-        print(state_raw.astype('uint8').shape, type(state_raw.astype('uint8')))
-        if self.args.save_video :
+        # print(state_raw.astype('uint8').shape, type(state_raw.astype('uint8')))
+        if self.args.save_video:
             out_video.release()
         if self.args.show:
             cv2.destroyAllWindows()
 
-class SingleTaskAgent(Agent):
-    def __init__(self, args):
-        # Call super class
-        super(SingleTaskAgent, self).__init__(args)
-
-
-class RandomAgent(Agent):
-    """Simple agent for DeepMind Lab."""
-
-    def _action(*entries):
-        return np.array(entries, dtype=np.intc)
-
-    ACTIONS = {
-        'look_left': _action(-20, 0, 0, 0, 0, 0, 0),
-        'look_right': _action(20, 0, 0, 0, 0, 0, 0),
-        'look_up': _action(0, 10, 0, 0, 0, 0, 0),
-        'look_down': _action(0, -10, 0, 0, 0, 0, 0),
-        'strafe_left': _action(0, 0, -1, 0, 0, 0, 0),
-        'strafe_right': _action(0, 0, 1, 0, 0, 0, 0),
-        'forward': _action(0, 0, 0, 1, 0, 0, 0),
-        'backward': _action(0, 0, 0, -1, 0, 0, 0),
-        'fire': _action(0, 0, 0, 0, 1, 0, 0),
-        'jump': _action(0, 0, 0, 0, 0, 1, 0),
-        'crouch': _action(0, 0, 0, 0, 0, 0, 1)
-    }
-
-    ACTION_LIST = ACTIONS.values()
-
-    def __init__(self, args):
-        # Call super class
-        super(RandomAgent, self).__init__(args)
-        print('Starting random discretized agent.')
-        self.reset()
-
-    def step(self):
-        """Gets an image state and a reward, returns an action."""
-        return random.choice(self.ACTION_LIST)
-
-    def reset(self):
-        self.rewards = 0.0
-        self.observation = None
-
 
 class SimpleDQNAgent(Agent):
-    def __init__(self, env, args, target_dir):
+    def __init__(self, args, rng, env, target_dir):
         # Call super class
-        super(SimpleDQNAgent, self).__init__(env, args, target_dir)
+        super(SimpleDQNAgent, self).__init__(args, rng, env, target_dir)
 
         # TODO: put that in args
         self.start_eps = 1.0
         self.end_eps = 0.1
-        self.eps_decay_iter = 0.33 * self.args.length
-        self.model_backup_frequency = 0.2 * self.args.length  # 0.01 * self.args.length
-        self.channels = 3
-        self.resolution = (40, 40) + (self.channels,)
+        self.eps_decay_iter = 0.33 * self.args.steps
+        # self.model_backup_frequency = 0.5 * self.args.steps  # 0.01 * self.args.steps
+        self.args.color_channels = 3
+        self.resolution = (40, 40) + (self.args.color_channels,)
+
+        tf.set_random_seed(self.args.random_seed)
 
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
@@ -185,8 +126,16 @@ class SimpleDQNAgent(Agent):
 
         self.session = tf.Session(config=config)
 
-        self.model = SimpleDQNModel(self.session, self.env.num_actions, self.args)
-        self.memory = SimpleReplayMemory(self.args)
+        self.model_input_shape = (self.args.input_width, self.args.input_height) + \
+                                 (self.args.color_channels,)
+        self.model = SimpleDQNModel(self.args,
+                                    self.rng,
+                                    self.session,
+                                    self.model_input_shape,
+                                    self.env.num_actions)
+        self.memory = SimpleReplayMemory(self.args,
+                                         self.rng,
+                                         self.model_input_shape)
 
         self.rewards = 0
 
@@ -194,22 +143,31 @@ class SimpleDQNAgent(Agent):
         if self.args.load_model is not None:
             # print("Loading model from: ", self.args.load_model)
             self.saver.restore(self.session, self.args.load_model)
+            # self.model_name = os.path.basename(self.args.load_model + "_init")
         else:
             init = tf.global_variables_initializer()
             self.session.run(init)
+        self.model_name = "DQN_0000"
+        self.model_last = os.path.join(self.model_path, self.model_name)
+        self.saver.save(self.session, self.model_last)
+
+    def preprocess_input(self, img):
+        if self.args.color_channels == 1:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img = cv2.resize(img, (self.model_input_shape[1], self.model_input_shape[0]))
+        return np.reshape(img, self.model_input_shape)
 
     def train_model(self):
         # train model with random batch from memory
-        if self.memory.size > 2 * self.memory.batch_size:
-            s1, a, s2, isterminal, r = self.memory.get_batch(self.memory.batch_size)
-
-            q = self.model.get_q(s1)
-            q2 = np.max(self.model.get_q(s2), axis=1)
-            q[np.arange(q.shape[0]), a] = r + (1 - isterminal) * self.model.discount_factor * q2
-            self.model.learn(s1, q)
+        if self.memory.size > 2 * self.args.batch_size:
+            s, a, r, s_prime, is_terminal = self.memory.get_batch()
+            qs = self.model.get_qs(s)
+            max_qs = np.max(self.model.get_qs(s_prime), axis=1)
+            qs[np.arange(qs.shape[0]), a] = r + (1 - is_terminal) * self.args.gamma * max_qs
+            self.model.train(s, qs)
 
     def step(self, iteration):
-        s = self.preprocess_observation(self.env.get_observation())
+        s = self.preprocess_input(self.env.get_observation())
 
         # Epsilon-greedy.
         if iteration < self.eps_decay_iter:
@@ -226,37 +184,35 @@ class SimpleDQNAgent(Agent):
         self.rewards += reward
 
         is_terminal = not self.env.is_running()
-        self.memory.add(s, a, is_terminal, reward)
+        self.memory.add(s, a, reward, is_terminal)
         self.train_model()
 
     def train(self):
         print("Starting training.")
         train_scores = []
         self.env.reset()
-        for step in xrange(1, self.args.length+1):
+        for step in range(1, self.args.steps+1):
             self.step(step)
             if not self.env.is_running():
                 train_scores.append(self.rewards)
                 self.rewards = 0
                 self.env.reset()
 
-            if step % self.model_backup_frequency == 0:
-                model_name_curr = os.path.join(
-                    self.model_path,
-                    "DQN_{:04}".format(int(step / self.model_backup_frequency)))
-                print("\nSaving the network weights to:",
-                      model_name_curr,
+            if step % self.args.backup_frequency == 0:
+                self.model_name = "DQN_{:04}".format(int(step / self.args.model_frequency))
+                self.model_last = os.path.join(self.model_path, self.model_name)
+                print("Saving the network weights to:",
+                      self.model_last,
                       file=sys.stderr)
-                self.saver.save(self.session, model_name_curr)
-
+                self.saver.save(self.session, self.model_last)  # model_name_curr)
+                # making a video of the progress
+                self.play()
                 # TODO: Update logger to logging
-                self.print_stats(time.time() - self.start_time,
-                                 step,
-                                 self.args.length,
-                                 train_scores)
+                print_stats(step,
+                            self.args.steps,
+                            train_scores,
+                            time.time() - self.start_time)
 
                 train_scores = []
 
         self.env.reset()
-
-

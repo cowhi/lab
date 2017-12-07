@@ -11,14 +11,21 @@ _logger = logging.getLogger(__name__)
 
 
 class Environment(object):
-    def __init__(self, args):
+    def __init__(self, args, rng):
+        _logger.info("Initializing Lab (FPS: %i, width: %i, height: %i, map: %s)" %
+                     (args.fps, args.width, args.height, args.map))
         self.args = args
+        self.rng = rng
+        self.env = None
+
+    def episode_ended(self):
+        return not self.env.is_running()
 
 
 class LabEnvironment(Environment):
-    def __init__(self, args):
+    def __init__(self, args, rng):
         # Call super class
-        super(LabEnvironment, self).__init__(args)
+        super(LabEnvironment, self).__init__(args, rng)
         self.env = deepmind_lab.Lab(
             self.args.level_script,
             ["RGB_INTERLACED"],
@@ -35,6 +42,7 @@ class LabEnvironment(Environment):
         self.mins = np.array([a["min"] for a in self.action_spec])
         self.maxs = np.array([a["max"] for a in self.action_spec])
         self.num_actions = len(self.action_spec)
+        # print(self.action_spec)
 
         # Set initial action
         self.action = None
@@ -46,7 +54,7 @@ class LabEnvironment(Environment):
         return self.env.action_spec()
 
     def count_actions(self):
-        return 3  # we only do forward and turn left/right here
+        return 3
 
     def _map_actions(self, action_raw):
         # TODO: this seems rather strange
