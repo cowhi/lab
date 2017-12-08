@@ -122,7 +122,8 @@ class Agent(object):
         self.epoch_rewards = []
 
     def epoch_cleanup(self):
-        self.model_name = "DQN_{:04}".format(int(self.step_current / self.args.backup_frequency))
+        self.model_name = "DQN_{:04}".format(
+            int(self.step_current / (self.args.backup_frequency * self.args.steps)))
         self.model_last = os.path.join(self.paths['model_path'], self.model_name)
         self.saver.save(self.session, self.model_last)
         _logger.info("Saved network after epoch %i (%i steps): %s" %
