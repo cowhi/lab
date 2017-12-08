@@ -6,24 +6,49 @@ _logger = logging.getLogger(__name__)
 
 
 class Model(object):
-    def __init__(self, args, rng):
+    def __init__(self, args, rng, log_path):
         _logger.info("Initializing Model (Type: %s)" %
                      args.model)
         self.args = args
         self.rng = rng
+        self.log_path = log_path
 
 
-class SimpleDQNModel(Model):
-    def __init__(self, args, rng, session, input_shape, output_shape):
+class TensorflowModel(Model):
+    def __init__(self, args, rng, session, input_shape, output_shape, log_path):
         # Call super class
-        super(SimpleDQNModel, self).__init__(args, rng)
+        super(TensorflowModel, self).__init__(args, rng, log_path)
         self.session = session
         self.input_shape = input_shape
         self.output_shape = output_shape
 
-        # Create the input layer.
+
+class SimpleDQNModel(TensorflowModel):
+    def __init__(self, args, rng, session, input_shape, output_shape, log_path):
+        # Call super class
+        super(SimpleDQNModel, self).__init__(args, rng, session, input_shape, output_shape, log_path)
+
+        # Define a placeholder for network input
         self.s_ = tf.placeholder(shape=[None] + list(self.input_shape),
                                  dtype=tf.float32)
+        # Build the network
+        self.q = self.build_network()
+        # Define a placeholder for loss calculation
+        self.q_ = tf.placeholder(shape=[None, self.output_shape],
+                                 dtype=tf.float32)
+        # Define important network parameters
+        self.loss = tf.losses.mean_squared_error(self.q_, self.q)
+        self.optimizer = tf.train.RMSPropOptimizer(self.args.alpha)
+        self.train_step = self.optimizer.minimize(self.loss)
+
+        # Define layer for selecting only the max value
+        self.action = tf.argmax(self.q, 1)
+
+        # Define layer for a softmax output
+        # TODO check if this works or if I should use agent to do it
+        self.action_probs = tf.contrib.layers.softmax(self.q)
+
+    def build_network(self):
         # Create the hidden layers of the network.
         conv1 = tf.contrib.layers.conv2d(self.s_,
                                          num_outputs=8,
@@ -37,22 +62,10 @@ class SimpleDQNModel(Model):
         fc1 = tf.contrib.layers.fully_connected(conv2_flat,
                                                 num_outputs=128)
         # Create the output layer of the network
-        self.q = tf.contrib.layers.fully_connected(fc1,
-                                                   num_outputs=self.output_shape,
-                                                   activation_fn=None)
-        # Define a placeholder for loss calculation
-        self.q_ = tf.placeholder(shape=[None, self.output_shape],
-                                 dtype=tf.float32)
-        # Define important network parameters
-        self.loss = tf.losses.mean_squared_error(self.q_, self.q)
-        self.optimizer = tf.train.RMSPropOptimizer(self.args.alpha)
-        self.train_step = self.optimizer.minimize(self.loss)
-
-        # Define layer for selecting only the max value
-        self.action = tf.argmax(self.q, 1)
-
-        # Define layer for a softmax output
-        self.action_probs = tf.contrib.layers.softmax(self.q)
+        q = tf.contrib.layers.fully_connected(fc1,
+                                              num_outputs=self.output_shape,
+                                              activation_fn=None)
+        return q
 
     def train(self, state, q):
         state = state.astype(np.float32)

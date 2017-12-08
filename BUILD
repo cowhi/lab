@@ -1056,7 +1056,7 @@ py_binary(
 py_binary(
     name = "launcher",
     srcs = ["cowhi/launcher.py",
-            "cowhi/agents2.py",
+            "cowhi/agents.py",
             "cowhi/environments.py",
             "cowhi/experiments.py",
             "cowhi/models.py",

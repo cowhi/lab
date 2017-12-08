@@ -31,7 +31,7 @@ class DiscretizedRandomAgent(object):
         'fire': _action(0, 0, 0, 0, 1, 0, 0),
         'jump': _action(0, 0, 0, 0, 0, 1, 0),
         'crouch': _action(0, 0, 0, 0, 0, 0, 1)
-  }
+    }
 
     ACTION_LIST = ACTIONS.values()
 

@@ -8,7 +8,7 @@ import os
 import time
 
 from cowhi.experiments import Experiment
-from cowhi.helper import create_dir, dump_args, prepare_logger
+from cowhi.helper import create_dir, dump_args, prepare_logger, plot_experiment
 
 __author__ = "Ruben Glatt"
 __copyright__ = "Ruben Glatt"
@@ -20,7 +20,7 @@ def parse_args():
         description="Framework to guide RL in the Deepmind Lab environment")
 
     experiment_args = parser.add_argument_group('Experiment')
-    experiment_args.add_argument('--steps', type=int, default=150,
+    experiment_args.add_argument('--steps', type=int, default=1000000,
                                  help='Number of steps to run the agent')
     experiment_args.add_argument('--log_level', type=str, default='info',
                                  help='The log level for the log file.')
@@ -30,12 +30,14 @@ def parse_args():
                                  help='If this is set a video is shown during testing.')
     experiment_args.add_argument('--play', type=bool, default=False,
                                  help='If this is set the agent only runs some test steps.')
-    experiment_args.add_argument('--backup_frequency', type=float, default=0.1,
+    experiment_args.add_argument('--backup_frequency', type=float, default=0.01,
                                  help='Frequency of model backups: backup_frequency * steps.')
     experiment_args.add_argument("--random_seed", type=int, default=666,
                                  help="Random seed for reproducible experiments.")
 
     environment_args = parser.add_argument_group('Environment')
+    environment_args.add_argument('--env', type=str, default='LabLimitedActions',
+                                  help='The environment class that we want to use.')
     environment_args.add_argument('--width', type=int, default=80,
                                   help='Horizontal size of the observations')
     environment_args.add_argument('--height', type=int, default=80,
@@ -58,9 +60,9 @@ def parse_args():
                             help='The number of frames where an action is repeated.')
     agent_args.add_argument('--epsilon_start', type=float, default=1.0,
                             help='Exploration rate (epsilon) at the beginning of training.')
-    agent_args.add_argument('--epsilon_decay_steps', type=int, default=600000,
+    agent_args.add_argument('--epsilon_decay_steps', type=int, default=700000,
                             help='Number of steps from starting epsilon to minimum epsilon.')
-    agent_args.add_argument('--epsilon_min', type=float, default=0.1,
+    agent_args.add_argument('--epsilon_min', type=float, default=0.01,
                             help='Minimum value of exploration rate (epsilon) during training.')
 
     model_args = parser.add_argument_group('Model')
@@ -80,10 +82,22 @@ def parse_args():
                             help='Batch size during network training.')
 
     memory_args = parser.add_argument_group('Memory')
-    memory_args.add_argument('--memory_size', type=int, default=1000000,
+    model_args.add_argument('--memory', type=str, default='SimpleReplayMemory',
+                            help='The replay memory we want to use for training.')
+    memory_args.add_argument('--memory_size', type=int, default=300000,
                              help='Size of the replay memory.')
 
     return parser.parse_args()
+
+
+def make_path_structure(path_to_dir):
+    print('Saving all in:', path_to_dir)
+    paths = {
+        'log_path': create_dir(path_to_dir),
+        'model_path': create_dir(os.path.join(path_to_dir, 'models')),
+        'video_path': create_dir(os.path.join(path_to_dir, 'videos')),
+        'plot_path': create_dir(os.path.join(path_to_dir, 'plots'))}
+    return paths
 
 
 def main():
@@ -96,19 +110,23 @@ def main():
         str(args.map.lower()),
         str(args.agent.lower()))
     path_to_dir = os.path.join(os.path.expanduser("~"), ".lab", new_dir)
-    log_path = create_dir(path_to_dir)
+    paths = make_path_structure(path_to_dir)
 
     # save arguments as a text file
-    dump_args(log_path, args)
+    dump_args(paths['log_path'], args)
 
     # Initialize and start logger
-    prepare_logger(log_path, args.log_level)
+    prepare_logger(paths['log_path'], args.log_level)
     _logger = logging.getLogger(__name__)
     _logger.info("Start")
 
     # Initialize and start experiment
-    experiment = Experiment(args, log_path)
+    experiment = Experiment(args, paths)
     experiment.run()
+
+    # Plot experiment
+    plot_experiment(paths['log_path'], 'episode_stats')
+
     _logger.info("Finished")
 
 

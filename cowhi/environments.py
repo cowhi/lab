@@ -4,28 +4,36 @@ from __future__ import print_function
 
 import cv2
 import deepmind_lab
+import six
 import numpy as np
+
+from collections import OrderedDict
 
 import logging
 _logger = logging.getLogger(__name__)
 
 
 class Environment(object):
+
+    ACTIONS = OrderedDict([
+        ('look_left', np.array((-64, 0, 0, 0, 0, 0, 0), dtype=np.intc)),  # min/max: -512/0
+        ('look_right', np.array((64, 0, 0, 0, 0, 0, 0), dtype=np.intc)),  # min/max: 0/512
+        ('look_up', np.array((0, 10, 0, 0, 0, 0, 0), dtype=np.intc)),  # min/max: 0/512
+        ('look_down', np.array((0, -10, 0, 0, 0, 0, 0), dtype=np.intc)),  # min/max: -512/0
+        ('strafe_left', np.array((0, 0, -1, 0, 0, 0, 0), dtype=np.intc)),  # min/max: -1/0
+        ('strafe_right', np.array((0, 0, 1, 0, 0, 0, 0), dtype=np.intc)),  # min/max: 0/1
+        ('forward', np.array((0, 0, 0, 1, 0, 0, 0), dtype=np.intc)),  # min/max: 0/1
+        ('backward', np.array((0, 0, 0, -1, 0, 0, 0), dtype=np.intc)),  # min/max: -1/0
+        ('fire', np.array((0, 0, 0, 0, 1, 0, 0), dtype=np.intc)),  # min/max: 0/1
+        ('jump', np.array((0, 0, 0, 0, 0, 1, 0), dtype=np.intc)),  # min/max: 0/1
+        ('crouch', np.array((0, 0, 0, 0, 0, 0, 1), dtype=np.intc))  # min/max: 0/1
+    ])
+
     def __init__(self, args, rng):
-        _logger.info("Initializing Lab (FPS: %i, width: %i, height: %i, map: %s)" %
-                     (args.fps, args.width, args.height, args.map))
+        _logger.info("Initializing Lab (Type: %s, FPS: %i, width: %i, height: %i, map: %s)" %
+                     (args.env, args.fps, args.width, args.height, args.map))
         self.args = args
         self.rng = rng
-        self.env = None
-
-    def episode_ended(self):
-        return not self.env.is_running()
-
-
-class LabEnvironment(Environment):
-    def __init__(self, args, rng):
-        # Call super class
-        super(LabEnvironment, self).__init__(args, rng)
         self.env = deepmind_lab.Lab(
             self.args.level_script,
             ["RGB_INTERLACED"],
@@ -34,44 +42,23 @@ class LabEnvironment(Environment):
                 "width": str(self.args.width),
                 "height": str(self.args.height)
             })
-        self.reset()
-
-        # TODO: not sure if necessary in this form
-        self.action_spec = self.get_action_specs()
-        self.indices = {a["name"]: i for i, a in enumerate(self.action_spec)}
-        self.mins = np.array([a["min"] for a in self.action_spec])
-        self.maxs = np.array([a["max"] for a in self.action_spec])
-        self.num_actions = len(self.action_spec)
-        # print(self.action_spec)
-
-        # Set initial action
-        self.action = None
+        self.action_mapping = None
+        self.actions = None
 
     def reset(self):
         self.env.reset()
 
-    def get_action_specs(self):
-        return self.env.action_spec()
+    def get_actions(self):
+        actions = OrderedDict()
+        for key, value in six.iteritems(self.action_mapping):
+            actions[key] = self.ACTIONS[value]
+        return actions
+
+    def map_action(self, action):
+        return self.actions[action]
 
     def count_actions(self):
-        return 3
-
-    def _map_actions(self, action_raw):
-        # TODO: this seems rather strange
-        self.action = np.zeros([self.num_actions])
-        if action_raw == 0:
-            self.action[self.indices["LOOK_LEFT_RIGHT_PIXELS_PER_FRAME"]] = -25
-        elif action_raw == 1:
-            self.action[self.indices["LOOK_LEFT_RIGHT_PIXELS_PER_FRAME"]] = 25
-        if action_raw == 2:  # 7
-            self.action[self.indices["MOVE_BACK_FORWARD"]] = 1
-        return np.clip(self.action, self.mins, self.maxs).astype(np.intc)
-
-    def step(self, action, num_steps=None):
-        if not num_steps:
-            num_steps = self.args.frame_repeat
-        return self.env.step(self._map_actions(action),
-                             num_steps=num_steps)
+        return len(self.actions)
 
     def get_observation(self):
         obs = self.env.observations()
@@ -80,3 +67,52 @@ class LabEnvironment(Environment):
     def is_running(self):
         return self.env.is_running()
 
+    def step(self, action, num_steps=None):
+        if not num_steps:
+            num_steps = self.args.frame_repeat
+        return self.env.step(self.map_action(action),
+                             num_steps=num_steps)
+
+    def _map_actions(self, *args):
+        """ Individual map per environment """
+        pass
+
+
+class LabAllActions(Environment):
+    def __init__(self, args, rng):
+        # Call super class
+        super(LabAllActions, self).__init__(args, rng)
+        self.action_mapping = self.get_action_mapping()
+        self.actions = self.get_actions()
+
+    @staticmethod
+    def get_action_mapping():
+        action_mapping = {
+            0: 'look_left',
+            1: 'look_right',
+            2: 'look_up',
+            3: 'look_down',
+            4: 'strafe_left',
+            5: 'strafe_right',
+            6: 'forward',
+            7: 'backward',
+            8: 'fire',
+            9: 'jump',
+            10: 'crouch'}
+        return action_mapping
+
+
+class LabLimitedActions(Environment):
+    def __init__(self, args, rng):
+        # Call super class
+        super(LabLimitedActions, self).__init__(args, rng)
+        self.action_mapping = self.get_action_mapping()
+        self.actions = self.get_actions()
+
+    @staticmethod
+    def get_action_mapping():
+        action_mapping = {
+            0: 'look_left',
+            1: 'look_right',
+            2: 'forward'}
+        return action_mapping

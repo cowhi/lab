@@ -5,11 +5,13 @@ from __future__ import print_function
 import errno
 import logging
 import os
+import scipy.stats
 import shutil
 import sys
 
+import matplotlib.pyplot as plt
 import numpy as np
-import scipy.stats
+import pandas as pd
 
 
 def dump_args(log_path, args):
@@ -77,6 +79,7 @@ def prepare_logger(log_path, log_level):
 
 
 def print_stats(step, step_num, train_scores, elapsed_time):
+    _logger = logging.getLogger(__name__)
     steps_per_s = 1.0 * step / elapsed_time
     steps_per_m = 60.0 * step / elapsed_time
     steps_per_h = 3600.0 * step / elapsed_time
@@ -90,12 +93,14 @@ def print_stats(step, step_num, train_scores, elapsed_time):
     print("{}% | Steps: {}/{}, {:.2f}M step/h, {:02}:{:02}:{:02}/{:02}:{:02}:{:02}".format(
         100.0 * step / step_num, step, step_num, steps_per_h / 1e6,
         elapsed_h, elapsed_m, elapsed_s, remain_h, remain_m, remain_s), file=sys.stderr)
-
+    _logger.info("{}% | Steps: {}/{}, {:.2f}M step/h, {:02}:{:02}:{:02}/{:02}:{:02}:{:02}".format(
+        100.0 * step / step_num, step, step_num, steps_per_h / 1e6,
+        elapsed_h, elapsed_m, elapsed_s, remain_h, remain_m, remain_s))
     mean_train = 0
     std_train = 0
     min_train = 0
     max_train = 0
-    if (len(train_scores) > 0):
+    if len(train_scores) > 0:
         train_scores = np.array(train_scores)
         mean_train = train_scores.mean()
         std_train = train_scores.std()
@@ -103,6 +108,8 @@ def print_stats(step, step_num, train_scores, elapsed_time):
         max_train = train_scores.max()
     print("Episodes: {} Rewards: mean: {:.2f}, std: {:.2f}, min: {:.2f}, max: {:.2f}".format(
         len(train_scores), mean_train, std_train, min_train, max_train), file=sys.stderr)
+    _logger.info("Episodes: {} Rewards: mean: {:.2f}, std: {:.2f}, min: {:.2f}, max: {:.2f}".format(
+        len(train_scores), mean_train, std_train, min_train, max_train))
 
 
 def calculate_stats(my_list, confidence=0.95):
@@ -114,6 +121,21 @@ def calculate_stats(my_list, confidence=0.95):
     conf_lower, conf_upper = scipy.stats.t.interval(confidence, len(my_array) - 1, loc=np.mean(my_array),
                                                     scale=scipy.stats.sem(my_array))
     return array_mean, array_ste, array_std, conf_lower, conf_upper
+
+
+def plot_experiment(path_to_dir, file_name):
+    df = pd.read_csv(os.path.join(path_to_dir, file_name + '.csv'))
+    # print(df)
+    for column in df.columns:
+        plt.figure(figsize=(10, 4), dpi=80)
+        plt.plot(df['episode'], df[column],
+                 label=column, color='blue', linewidth=2.0)
+        plt.ylabel(column, fontsize=20, fontweight='bold')
+        plt.xlabel('episodes', fontsize=20, fontweight='bold')
+        plt.legend()
+        plt.savefig(os.path.join(path_to_dir, 'plots', 'plot_' + str(column) + '.png'),
+                    bbox_inches='tight')
+        plt.close('all')
 
 
 def write_stats_file(path_to_file, *args):
