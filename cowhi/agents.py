@@ -88,7 +88,7 @@ class Agent(object):
 
     def step(self):
         s = self.preprocess_input(self.env.get_observation())
-        a = self.get_action(s)
+        a = self.get_action(s, self.epsilon)
         r = self.env.step(a)
         is_terminal = not self.env.is_running()
         return s, a, r, is_terminal
@@ -106,14 +106,14 @@ class Agent(object):
         self.total_reward += self.episode_reward
         self.loss = sum(self.episode_losses)/len(self.episode_losses)
         new_row = (self.episode,  # current episode
-                   time.time() - self.start_time,  # total time
-                   time.time() - self.episode_start_time,  # episode duration
+                   "{0:.1f}".format(time.time() - self.start_time),  # total time
+                   "{0:.1f}".format(time.time() - self.episode_start_time),  # episode duration
                    self.step_current,  # total steps so far
                    self.step_episode,  # steps per episode
                    self.total_reward,  # total reward so far
                    self.episode_reward,  # reward per episode
-                   self.epsilon,  # current epsilon
-                   self.loss
+                   "{0:.4f}".format(self.epsilon),  # current epsilon
+                   "{0:.4f}".format(self.loss)  # avg loss per episode
                    )
         self.write_csv(new_row)
 
@@ -132,6 +132,7 @@ class Agent(object):
                     self.args.steps,
                     self.epoch_rewards,
                     time.time() - self.start_time)
+        # TODO do testrun and save stats (epoch, steps, episodes, test_reward_avg, test_step_avg)
         if self.args.save_video:
             self.play()
 
@@ -158,7 +159,7 @@ class Agent(object):
 
             state_raw = self.env.get_observation()
             state = self.preprocess_input(state_raw)
-            action = self.get_action(state)
+            action = self.get_action(state, 0.05)
 
             for _ in range(self.args.frame_repeat):
                 if self.args.show:
@@ -212,6 +213,7 @@ class SimpleDQNAgent(Agent):
         else:
             init = tf.global_variables_initializer()
             self.session.run(init)
+        # Backup initial model weights
         self.model_name = "DQN_0000"
         self.model_last = os.path.join(self.paths['model_path'], self.model_name)
         self.saver.save(self.session, self.model_last)
@@ -228,15 +230,15 @@ class SimpleDQNAgent(Agent):
 
     def update_epsilon(self, steps):
         # Update epsilon if necessary
-        if steps > self.args.epsilon_decay_steps:
+        if steps > self.args.epsilon_decay * self.args.steps:
             return self.args.epsilon_min
         else:
             return self.args.epsilon_start - \
                   steps * (self.args.epsilon_start - self.args.epsilon_min) / \
-                  self.args.epsilon_decay_steps
+                   (self.args.epsilon_decay * self.args.steps)
 
-    def get_action(self, state):
-        if self.rng.rand() <= self.epsilon:
+    def get_action(self, state, epsilon):
+        if self.rng.rand() <= epsilon:
             return self.rng.randint(0, self.available_actions)
         else:
             # TODO add ability to work with q values

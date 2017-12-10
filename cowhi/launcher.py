@@ -56,12 +56,12 @@ def parse_args():
     agent_args = parser.add_argument_group('Agent')
     agent_args.add_argument('--agent', type=str, default='SimpleDQNAgent',
                             help='The agent we want to use for training.')
-    agent_args.add_argument('--frame_repeat', type=int, default=4,
+    agent_args.add_argument('--frame_repeat', type=int, default=10,
                             help='The number of frames where an action is repeated.')
     agent_args.add_argument('--epsilon_start', type=float, default=1.0,
                             help='Exploration rate (epsilon) at the beginning of training.')
-    agent_args.add_argument('--epsilon_decay_steps', type=int, default=700000,
-                            help='Number of steps from starting epsilon to minimum epsilon.')
+    agent_args.add_argument('--epsilon_decay', type=int, default=0.7,
+                            help='Percentage of all steps from starting epsilon to minimum epsilon.')
     agent_args.add_argument('--epsilon_min', type=float, default=0.01,
                             help='Minimum value of exploration rate (epsilon) during training.')
 
@@ -84,7 +84,7 @@ def parse_args():
     memory_args = parser.add_argument_group('Memory')
     model_args.add_argument('--memory', type=str, default='SimpleReplayMemory',
                             help='The replay memory we want to use for training.')
-    memory_args.add_argument('--memory_size', type=int, default=300000,
+    memory_args.add_argument('--memory_size', type=int, default=1000000,
                              help='Size of the replay memory.')
 
     return parser.parse_args()
@@ -125,7 +125,8 @@ def main():
     experiment.run()
 
     # Plot experiment
-    plot_experiment(paths['log_path'], 'episode_stats')
+    if not args.play:
+        plot_experiment(paths['log_path'], 'episode_stats')
 
     _logger.info("Finished")
 
