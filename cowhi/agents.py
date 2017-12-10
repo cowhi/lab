@@ -14,7 +14,7 @@ from six.moves import range
 
 from cowhi.models import SimpleDQNModel
 from cowhi.replaymemories import SimpleReplayMemory
-from cowhi.helper import print_stats
+from cowhi.helper import get_human_readable, print_stats
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -174,8 +174,9 @@ class Agent(object):
                 state_raw = self.env.get_observation()
         if self.args.save_video:
             out_video.release()
-            print("Saved video (fps:%i, size:%s) to: %s" %
-                  (self.args.fps, str((self.args.width, self.args.height)), video_path))
+            print("Saved video (fps:%i, size:%s) to: %s [%s]" %
+                  (self.args.fps, str((self.args.width, self.args.height)),
+                   video_path, get_human_readable(os.path.getsize(video_path))))
         if self.args.show:
             cv2.destroyAllWindows()
 

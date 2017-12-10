@@ -138,6 +138,15 @@ def plot_experiment(path_to_dir, file_name):
         plt.close('all')
 
 
+def get_human_readable(size, precision=2):
+    suffixes = ['B', 'KB', 'MB', 'GB', 'TB']
+    suffix_index = 0
+    while size > 1024 and suffix_index < 4:
+        suffix_index += 1  # increment the index of the suffix
+        size = size/1024.0  # apply the division
+    return "%.*f%s" % (precision, size, suffixes[suffix_index])
+
+
 def write_stats_file(path_to_file, *args):
     _logger = logging.getLogger(__name__)
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY

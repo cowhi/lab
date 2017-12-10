@@ -58,4 +58,5 @@ class Experiment(object):
             self.agent.train()
 
         # Test and backup final agent
+        # TODO overrides last epoch
         self.agent.play()
