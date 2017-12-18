@@ -1055,13 +1055,13 @@ py_binary(
 
 py_binary(
     name = "launcher",
-    srcs = ["cowhi/launcher.py",
-            "cowhi/agents.py",
-            "cowhi/environments.py",
-            "cowhi/experiments.py",
-            "cowhi/models.py",
-            "cowhi/helper.py",
-            "cowhi/replaymemories.py"],
+    srcs = ["lab_rl/launcher.py",
+            "lab_rl/agents.py",
+            "lab_rl/environments.py",
+            "lab_rl/experiments.py",
+            "lab_rl/models.py",
+            "lab_rl/helper.py",
+            "lab_rl/replaymemories.py"],
     data = [":deepmind_lab.so"],
-    main = "cowhi/launcher.py",
+    main = "lab_rl/launcher.py",
 )
